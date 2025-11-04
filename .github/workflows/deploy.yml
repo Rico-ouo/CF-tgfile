@@ -1,0 +1,74 @@
+name: Deploy Cloudflare Worker + D1
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Create D1 + Migrate + Deploy
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install wrangler
+        run: npm install -g wrangler jq
+
+      - name: Create D1 Database (if not exist)
+        id: create_d1
+        run: |
+          echo "🔹 Checking D1 database..."
+          API="https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/d1/database"
+          existing=$(curl -s -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" $API | jq -r '.result[] | select(.name=="tgfile-db") | .uuid')
+
+          if [ -z "$existing" ]; then
+            echo "🆕 Creating new D1 database: tgfile-db"
+            resp=$(curl -s -X POST "$API" \
+              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{"name": "tgfile-db"}')
+            database_id=$(echo "$resp" | jq -r '.result.uuid')
+          else
+            echo "✅ Database already exists."
+            database_id=$existing
+          fi
+
+          echo "database_id=$database_id" >> $GITHUB_OUTPUT
+
+      - name: Update wrangler.toml with database_id
+        run: |
+          sed -i "s|database_id = \".*\"|database_id = \"${{ steps.create_d1.outputs.database_id }}\"|" wrangler.toml
+          echo "Updated wrangler.toml:"
+          cat wrangler.toml
+
+      - name: Apply D1 migrations
+        run: |
+          wrangler d1 migrations apply tgfile-db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+        env:
+          DOMAIN: ${{ secrets.DOMAIN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          USERNAME: ${{ secrets.USERNAME }}
+          PASSWORD: ${{ secrets.PASSWORD }}
