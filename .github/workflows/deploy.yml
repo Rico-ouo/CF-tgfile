@@ -23,8 +23,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install wrangler
-        run: npm install -g wrangler jq
+      - name: Install wrangler and jq
+        run: |
+          npm install -g wrangler
+          sudo apt-get update
+          sudo apt-get install -y jq
+
 
       - name: Create D1 Database (if not exist)
         id: create_d1
