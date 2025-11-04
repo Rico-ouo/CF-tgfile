@@ -6,7 +6,7 @@ compatibility_date = "2024-07-18"
 [[d1_databases]]
 binding = "DATABASE"
 database_name = "tgfile-db"
-database_id = "REPLACE_ME"  # 由 GitHub Action 自动替换
+database_id = "REPLACE_ME"
 
 # 静态资源配置
 [site]
@@ -17,8 +17,3 @@ bucket = "./dist"
 ENABLE_AUTH = "true"
 COOKIE = "7"
 MAX_SIZE_MB = "20"
-
-# 迁移配置
-[[migrations]]
-tag = "v1"
-new_classes = ["D1_binding"]
