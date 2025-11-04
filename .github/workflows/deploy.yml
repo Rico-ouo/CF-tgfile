@@ -34,22 +34,29 @@ jobs:
         id: create_d1
         run: |
           echo "🔹 Checking D1 database..."
-          API="https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/d1/database"
-          existing=$(curl -s -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" $API | jq -r '.result[] | select(.name=="tgfile-db") | .uuid')
+          API="https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/d1/databases"
+          
+          # 获取现有数据库列表
+          resp=$(curl -s -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" "$API")
+          echo "API Response: $resp"
 
-          if [ -z "$existing" ]; then
+          existing=$(echo "$resp" | jq -r '.result[]? | select(.name=="tgfile-db") | .uuid')
+
+          if [ -z "$existing" ] || [ "$existing" = "null" ]; then
             echo "🆕 Creating new D1 database: tgfile-db"
-            resp=$(curl -s -X POST "$API" \
+            create_resp=$(curl -s -X POST "$API" \
               -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
               -H "Content-Type: application/json" \
               -d '{"name": "tgfile-db"}')
-            database_id=$(echo "$resp" | jq -r '.result.uuid')
+            echo "Create Response: $create_resp"
+            database_id=$(echo "$create_resp" | jq -r '.result.uuid')
           else
-            echo "✅ Database already exists."
+            echo "✅ Database already exists: $existing"
             database_id=$existing
           fi
 
           echo "database_id=$database_id" >> $GITHUB_OUTPUT
+
 
       - name: Update wrangler.toml with database_id
         run: |
